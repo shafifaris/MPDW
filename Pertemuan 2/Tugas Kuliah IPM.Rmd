@@ -1,0 +1,149 @@
+---
+title: "Tugas Kuliah"
+author: "Shafi Faris Arif Rabbani"
+date: "2025-09-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Memuat pustaka yang dibutuhkan
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(lmtest)
+library(car)
+library(ggplot2)
+library(gridExtra)
+```
+
+
+```{r}
+# Membaca data dari file Excel
+Kalbar<- read_excel("C:/Users/M S I/OneDrive/Documents/Kalbar IPM.xlsx")
+
+# Melihat struktur data
+str(Kalbar)
+summary(Kalbar)
+Kalbar
+```
+
+
+```{r}
+model <- lm(Ipm ~ Tahun, data = Kalbar)
+summary(model)
+
+```
+
+```{r}
+dwtest(model)
+```
+```{r}
+par(mfrow = c(2, 2))   
+plot(model)
+par(mfrow = c(1, 1))
+```
+```{r}
+# Hitung residual
+resid <- residuals(model)
+fitted <- fitted(model)
+order <- 1:length(resid)
+
+```
+
+```{r}
+# 1. Normal Probability Plot (QQ Plot)
+p1 <- ggplot(data.frame(resid), aes(sample = resid)) +
+  stat_qq(color="red") +
+  stat_qq_line(color="blue") +
+  labs(title = "Normal Probability Plot of the Residuals",
+       x = "Residual", y = "Percent") +
+  theme_minimal()
+p1
+```
+
+
+```{r}
+# 2. Residuals vs Fitted
+p2 <- ggplot(data.frame(fitted, resid), aes(fitted, resid)) +
+  geom_point(color="red") +
+  geom_hline(yintercept = 0, color="black") +
+  labs(title = "Residuals Versus the Fitted Values",
+       x = "Fitted Value", y = "Residual") +
+  theme_minimal()
+p2
+
+```
+
+
+```{r}
+# 3. Histogram of Residuals
+p3 <- ggplot(data.frame(resid), aes(x=resid)) +
+  geom_histogram(color="black", fill="grey", bins=10) +
+  labs(title = "Histogram of the Residuals",
+       x = "Residual", y = "Frequency") +
+  theme_minimal()
+p3
+```
+
+
+```{r}
+# 4. Residuals vs Order
+p4 <- ggplot(data.frame(order, resid), aes(order, resid)) +
+  geom_point(color="red") +
+  geom_line(color="blue") +
+  geom_hline(yintercept = 0, color="black") +
+  labs(title = "Residuals Versus the Order of the Data",
+       x = "Observation Order", y = "Residual") +
+  theme_minimal()
+p4
+```
+
+```{r}
+# Residual dari model
+resid <- residuals(model)
+
+# ACF dengan batas signifikansi 5% yang MELENGKUNG (moving-average based CI)
+acf(
+  resid,
+  main = "Autocorrelation Function of Residuals (5% significance limits)",
+  ci = 0.95,   
+  ci.type = "ma",  
+  na.action = na.pass,
+  ylim = c(-1, 1)   
+)
+
+abline(h = c(-0.5, 0.5), col = "red", lty = 2)
+```
+
+
+```{r}
+# Plot PACF
+pacf(
+  resid,
+  main = "Partial Autocorrelation Function of Residuals (5% significance limits)",
+  ci = 0.95,        # 95% CI = 5% level (two-sided)
+  na.action = na.pass,
+  ylim = c(-1, 1)
+)
+
+```
+```{r}
+library(forecast)
+
+# ACF dengan Bartlett's formula (bergigi/melengkung)
+Acf(residuals(model), main="Autocorrelation Function of Residuals", ci.type="ma")
+```
+
+
+```{r}
+# PACF dengan Bartlett's formula
+Pacf(residuals(model), main="Partial Autocorrelation Function of Residuals", ci.type="ma")
+
+
+```
+
+
