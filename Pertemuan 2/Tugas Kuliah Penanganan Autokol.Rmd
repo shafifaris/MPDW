@@ -1,0 +1,200 @@
+---
+title: "Tugas Kuliah Pertemuan 2 - Deteksi dan Penanganan Autokorelasi"
+author: "Shafi Faris Arif Rabbani-G1401231008"
+date: "2025-09-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Memuat pustaka yang dibutuhkan
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(lmtest)
+library(car)
+library(ggplot2)
+library(gridExtra)
+library(orcutt)
+library(HoRM)
+library(rio)
+```
+
+## Import Data
+
+```{r}
+# Membaca data dari file Excel
+DIY<- import("https://raw.githubusercontent.com/mriannaa/MPDW/refs/heads/main/Pertemuan%202/DIY%20IPM.csv")
+DIY
+```
+## Eksplorasi Data
+
+```{r}
+# Melihat struktur data
+str(DIY)
+summary(DIY)
+DIY
+```
+```{r}
+diy.ts <- ts(DIY$IPM) #Mengubah Data menjadi Data Deret Waktu, agar terbaca oleh R
+```
+
+```{r}
+summary(diy.ts)
+```
+### Plot Deret Waktu
+```{r}
+#Untuk melihat Plot Deret Waktu
+ts.plot(diy.ts, xlab="Time Period ", ylab="Reading", 
+        main = "Time Series Plot")
+points(diy.ts)
+```
+
+
+## Model Awal
+
+```{r}
+model <- lm(IPM ~ Tahun, data = DIY)
+summary(model)
+
+```
+## Diagnosis (Investigasi Sisaan)
+
+### Diagnosis Visual
+
+```{r}
+# Ambil sisaan dari model
+sisaan_awal <- residuals(model)
+
+# Plot sisaan terhadap waktu
+plot(DIY$Tahun, sisaan_awal, type="o", pch=20, col="red",
+     main="Plot Sisaan vs Waktu", xlab="Tahun", ylab="Sisaan")
+abline(h=0, lty=2) # Garis referensi di y=0
+```
+### Diagnosis Formal (Uji Durbin-Watson)
+```{r}
+dwtest(model)
+```
+**Hasil Investigasi:**
+
+-   P-value yang dihasilkan **sangat kecil (0.0035)**, yaitu di bawah tingkat signifikansi 0.05.
+
+-   Kesimpulan: Tolak H0 pada taraf nyata 0.05, hal ini menunjukan bahwa model terbukti **memiliki autokorelasi**
+
+## Penanganan Autokorelasi
+### Cochrane-Orcutt
+```{r}
+cochrane.orcutt(model)
+```
+
+```{r}
+model_co <- cochrane.orcutt(model)
+summary(model_co)
+
+# rho paling optimum
+rho <- model_co$rho
+cat("Rho optimum:", rho)
+```
+**Hasil Penanganan (C-O):**
+
+-   Nilai **Durbin-Watson baru** sekarang jauh lebih dekat ke 2, dan p-value-nya (\> 0.05) menunjukkan bahwa **autokorelasi sudah berhasil diatasi**.
+
+**Verifikasi Manual:**
+
+```{r}
+# MANUAL
+ipm.trans <- DIY$IPM[-1] - DIY$IPM[-10]*rho
+
+tahun.trans <- DIY$Tahun[-1] - DIY$Tahun[-10]*rho
+model_co_manual <- lm(ipm.trans~tahun.trans)
+
+b0_co_manual <- coef(model_co_manual)[1]/(1-rho)
+b1_co_manual <- coef(model_co_manual)[2]
+cat("Koefisien manual Cochrane-Orcutt:\n")
+cat("b0:", b0_co_manual, "\n")
+cat("b1:", b1_co_manual, "\n")
+```
+
+**Perhatikan:** Hasil koefisien manual sudah sangat mirip dengan hasil dari fungsi otomatis, yaitu dengan b0 = -599.4362 dan b1 = 0.3364035
+
+### Hildreth-Lu
+
+```{r}
+hildreth.lu.func<- function(r, model){
+  x <- model.matrix(model)[,-1]
+  y <- model.response(model.frame(model))
+  n <- length(y)
+  t <- 2:n
+  y <- y[t]-r*y[t-1]
+  x <- x[t]-r*x[t-1]
+  
+  return(lm(y~x))
+}
+
+#Pencariab rho yang meminimumkan SSE
+r <- c(seq(0.1,0.9, by= 0.1))
+tab <- data.frame("rho" = r, "SSE" = sapply(r, function(i){deviance(hildreth.lu.func(i, model))}))
+round(tab, 4)
+```
+
+```{r}
+#Rho optimal di sekitar 0.4
+rOpt <- seq(0.3,0.6, by= 0.001)
+tabOpt <- data.frame("rho" = rOpt, "SSE" = sapply(rOpt, function(i){deviance(hildreth.lu.func(i, model))}))
+head(tabOpt[order(tabOpt$SSE),])
+```
+
+```{r}
+#Grafik SSE optimum
+par(mfrow = c(1,1))
+plot(tab$SSE ~ tab$rho , type = "l", xlab = "Rho", ylab = "SSE")
+abline(v = tabOpt[tabOpt$SSE==min(tabOpt$SSE),"rho"], lty = 2, col="red",lwd=2)
+text(x=0.411, y=0.1646121, labels = "rho=0.411", cex = 0.8)
+```
+
+```{r}
+modelHL <- hildreth.lu(DIY$IPM, DIY$Tahun, rho = 0.411)
+summary(modelHL)
+```
+
+```{r}
+#Transformasi Balik
+cat("y = ", coef(modelHL)[1]/(1-0.411), "+", coef(modelHL)[2],"x", sep = "")
+```
+
+```{r}
+#Deteksi autokorelasi
+dwtest(modelHL)
+```
+
+## Evaluasi Akhir
+
+Mari kita bandingkan SSE dan Statistik Durbin-Watson dari ketiga model untuk melihat seberapa efektif penanganan kita.
+
+```{r}
+# Menghitung SSE untuk setiap model secara manual
+sse_awal <- sum(residuals(model)^2)
+sse_co <- sum(residuals(model_co)^2)
+sse_hl <- sum(residuals(modelHL)^2)
+
+# Membuat tabel perbandingan
+data.frame(
+  Metode = c("Model Awal (ada autokol)", "Cochrane-Orcutt (autokol tertangani)", "Hildreth-Lu (autokol tertangani)"),
+  SSE = c(sse_awal, sse_co, sse_hl),
+  DW_Statistic = c(dwtest(model)$statistic, model_co$DW[3], dwtest(modelHL)$statistic)
+)
+
+```
+
+**Kesimpulan Investigasi:**
+
+-   Baik metode Cochrane-Orcutt maupun Hildreth-Lu berhasil menurunkan SSE model, artinya model yang baru lebih akurat.
+
+-   Keduanya juga berhasil menghilangkan autokorelasi, yang ditunjukkan oleh statistik D-W yang mendekati 2.
+
+-   Model akhir yang seharusnya kita gunakan adalah salah satu dari model yang telah ditangani, karena estimasi koefisien dan uji signifikansinya sekarang jauh lebih dapat dipercaya.
+
+
