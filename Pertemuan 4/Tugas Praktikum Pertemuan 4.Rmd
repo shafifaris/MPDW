@@ -1,0 +1,290 @@
+---
+title: "Pertemuan 4 - TPG"
+author: "Shafi Faris Arif Rabbani"
+date: "2025-09-16"
+output: rmdformats::readthedown
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Perbandingan Dua Vektor Nilai Tengah Sampel Berpasangan
+
+## Import Data
+
+```{r}
+library(readxl)
+dataset <- read_excel("C:/Users/M S I/OneDrive/Documents/Data Kunjungan Wisatawan.xlsx")
+dataset
+```
+
+```{r}
+#perbaiki kolom 2 dan 4 
+dataset$`Wisatawan (Covid)` <- as.numeric(gsub(",", "", dataset$`Wisatawan (Covid)`))
+dataset$`Kunjungan Hotel (Covid)` <- as.numeric(gsub(",", "", dataset$`Kunjungan Hotel (Covid)`))
+dataset$`Wisatawan (Normal)` <- as.numeric(gsub(",", "", dataset$`Wisatawan (Normal)`))
+dataset$`Kunjungan Hotel (Normal)` <- as.numeric(gsub(",", "", dataset$`Kunjungan Hotel (Normal)`))
+
+
+```
+
+```{r}
+str(dataset)
+```
+
+```{r}
+#cek missing value 
+colSums(is.na(dataset))
+#atasi missing value 
+dataset <- na.omit(dataset)
+dataset
+```
+
+## Menghitung Selisih Essay Formal dan Informal
+
+```{r}
+# Hitung selisih
+d_wist  <- dataset[,1] - dataset[,3]
+d_hotel <- dataset[,2] - dataset[,4]
+
+# Masukkan ke data.frame
+X <- data.frame(
+  "Selisih Wisatawan" = d_wist,
+  "Selisih Kunjungan Hotel" = d_hotel
+)
+
+```
+
+## Menghitung vektor rataan dan matriks covarians
+
+```{r}
+xbar = apply(X, 2, mean, na.rm = TRUE)
+xbar
+```
+
+```{r}
+# Hitung matriks kovarians
+cov_m <- cov(X, use = "complete.obs")
+
+# Lihat hasil
+cov_m
+
+```
+
+## Uji T2 Hotelling Dua Populasi Sampel Berpasangan
+
+```{r}
+library(MVTests)
+mean0 = c(0,0)
+result = OneSampleHT2(X,mu0=mean0,alpha=0.05)
+summary(result)
+```
+
+Kesimpulan : Tolak H0 pada taraf nyata 5% karena p-value = 6.1e-13 \< alpha Artinya : Dengan tingkat kepercayaan 95%, dapat disimpulkan bahwa terdapat perbedaan total kunjungan wisatawan dan kunjungan hotel antara wisatawan saat masa Covid dengan wisatawan saat masa non covid.Terdapat perbedaan yang signifikan antara jumlah Wisatawan dan Kunjungan Hotel pada masa Covid dibandingkan dengan masa Normal. Hal ini menunjukkan bahwa pandemi Covid-19 memberikan dampak nyata terhadap sektor pariwisata, baik dari sisi jumlah wisatawan yang datang maupun tingkat kunjungan hotel.Dengan kata lain, rata-rata jumlah wisatawan dan kunjungan hotel pada masa Covid berbeda secara signifikan dari masa normal.
+
+## Selang Kepercayaan Simultan
+
+```{r}
+result$CI
+```
+
+## Selang Kepercayaan Bonferroni
+
+```{r}
+bon = function(mu,S,n,alpha,k){
+ p = length(mu)
+ lower = mu[k] - sqrt(S[k,k]/n) * abs(qt(alpha/(2*p), df=n-1))
+ upper = mu[k] + sqrt(S[k,k]/n) * abs(qt(alpha/(2*p), df=n-1))
+ c(lower = lower,upper = upper)
+}
+
+n = nrow(X)
+#Kata
+bon(xbar, cov_m,n,0.05,1)
+```
+
+```{r}
+#Kunjungan Hotel
+bon(xbar, cov_m,n,0.05,2)
+```
+
+# Perbandingan Dua Vektor Nilai Tengah Sampel Saling Bebas Ragam Sama
+
+## Import Data
+
+```{r}
+dataset2 <- read_excel("C:/Users/M S I/OneDrive/Documents/Data kura2.xlsx")
+dataset2
+```
+
+```{r}
+data_Female = dataset2[,1:2]
+data_Female
+```
+
+```{r}
+data_Male = dataset2[,3:4]
+data_Male
+```
+
+## Menghitung vektor rataan dan matriks covarians
+
+```{r}
+xbar1 = apply(data_Female, 2, mean)
+xbar1
+```
+
+```{r}
+xbar2 = apply(data_Male, 2, mean)
+xbar2
+```
+
+```{r}
+cov_m1 = cov(data_Female)
+cov_m1
+```
+
+```{r}
+cov_m2 = cov(data_Male)
+cov_m2
+```
+
+```{r}
+n1 = nrow(data_Female)
+n2 = nrow(data_Male)
+
+# S Gabungan
+s_gab = ((n1-1)*cov_m1+(n2-1)*cov_m2)/(n1+n2-2)
+s_gab
+```
+
+## Uji Hipotesis
+
+```{r}
+library(Hotelling)
+```
+
+```{r}
+t2_homogen = hotelling.test(data_Female,data_Male,var.equal=TRUE)
+t2_homogen
+```
+
+Kesimpulan : Tolak H0 pada taraf nyata 5% karena p-value = 0.0001461 \< alpha Artinya : Dengan tingkat kepercayaan 95%, pada saat ragam Pada taraf nyata 5%, terdapat perbedaan yang signifikan antara vektor rata-rata ukuran kura-kura Female dan Male. Dapat disimpulkan bahwa ukuran tubuh kura-kura jantan berbeda nyata dengan kura-kura betina.
+
+## Selang Kepercayaan Simultan
+
+```{r}
+T.ci = function(mu1, mu2, S_gab, n1, n2, avec=rep(1,length(mu)), level=0.95){
+p = length(mu1)
+mu = mu1-mu2
+cval = qf(level, p, n1+n2-p-1) * p * (n1+n2-2) / (n1+n2-p-1)
+zhat = crossprod(avec, mu)
+zvar = crossprod(avec, S_gab %*% avec)* (1/n1+1/n2)
+const = sqrt(cval * zvar)
+c(lower = zhat - const, upper = zhat + const)
+}
+
+#Female
+T.ci(xbar1, xbar2, s_gab, n1,n2, avec=c(1,0),level=0.95)
+```
+
+```{r}
+#Male
+T.ci(xbar1, xbar2, s_gab, n1,n2, avec=c(0,1),level=0.95)
+```
+
+## Selang Kepercayaan Bonferroni
+
+```{r}
+bon = function(mu1, mu2 ,S, n1, n2, alpha, k){
+ p = length(mu1)
+ mu = mu1-mu2
+ lower = mu[k] - sqrt((S[k,k]) *(1/n1+1/n2))* abs(qt(alpha/(2*p), df=n1+n2-2))
+ upper = mu[k] + sqrt((S[k,k]) *(1/n1+1/n2))* abs(qt(alpha/(2*p), df=n1+n2-2))
+ ci = c(lower = lower,upper = upper)
+ names(ci)= c("lower","upper")
+ ci
+}
+
+#Female
+
+bon(xbar1, xbar2, s_gab, n1, n2,0.05,1)
+```
+
+## Male
+
+```{r}
+#Male
+bon(xbar1, xbar2, s_gab, n1, n2,0.05,2)
+```
+
+# Perbandingan Dua Vektor Nilai Tengah Sampel Saling Bebas Ragam Tidak Sama
+
+## Import Data
+
+```{r}
+dataset2 <- read_excel("C:/Users/M S I/OneDrive/Documents/Data kura2.xlsx")
+data_Female = dataset2[,1:2]
+data_Male = dataset2[,3:4]
+
+```
+
+## Menghitung vektor rataan dan matriks covarians
+
+```{r}
+xbar1 = apply(data_Female, 2, mean)
+xbar1
+```
+
+```{r}
+xbar2 = apply(data_Male, 2, mean)
+xbar2
+```
+
+```{r}
+cov_m1 = cov(data_Female)
+cov_m1
+```
+
+```{r}
+cov_m1 = cov(data_Male)
+cov_m1
+```
+
+```{r}
+n1 = nrow(data_Female)
+n2 = nrow(data_Male)
+```
+
+## Uji Hipotesis
+
+```{r}
+library(Hotelling)
+t2_not_homogen = hotelling.test(data_Female,data_Male,var.equal=FALSE)
+t2_not_homogen
+```
+
+Kesimpulan : pada taraf nyata 5% karena, p-value = 0.0002127 \< α. Artinya, terdapat bukti yang cukup untuk menyatakan bahwa vektor rata-rata ukuran kura-kura Female berbeda dengan Male. Dengan tingkat kepercayaan 95%, dapat disimpulkan bahwa ukuran tubuh kura-kura jantan tidak sama dengan kura-kura betina.
+
+## Selang Kepercayaan Simultan
+
+```{r}
+T.ci = function(mu1, mu2, S1, S2, n1, n2, avec=rep(1,length(mu)), level=0.95){
+p = length(mu1)
+mu = mu1-mu2
+cval = qchisq(level, p)
+zhat = crossprod(avec, mu)
+zvar = crossprod(avec, S1 %*% avec)/n1 + crossprod(avec, S2 %*% avec)/n2
+const = sqrt(cval * zvar)
+c(lower = zhat - const, upper = zhat + const)
+}
+
+#Female
+T.ci(xbar1, xbar2, cov_m1, cov_m2, n1,n2, avec=c(1,0),level=0.95)
+```
+
+```{r}
+#Male
+T.ci(xbar1, xbar2, cov_m1, cov_m2, n1,n2, avec=c(0,1),level=0.95)
+```
